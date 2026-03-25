@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Kasir Konter Hikam Cell</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {font-family: Arial;background:#eef1f5;}
+.container {max-width:1100px;margin:auto;padding:20px;}
+.card {background:white;padding:15px;margin-bottom:15px;border-radius:10px;}
+.grid {display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.box {padding:15px;border-radius:10px;color:white;text-align:center;}
+.modal{background:#6c757d;}
+.jual{background:#28a745;}
+.laba{background:#ffc107;color:black;}
+.total{background:#007bff;}
+
+input,button,select {padding:10px;width:100%;margin-top:5px;}
+button{background:#007bff;color:white;border:none;cursor:pointer;}
+
+table {width:100%;border-collapse:collapse;}
+th,td {padding:10px;border-bottom:1px solid #ddd;text-align:center;}
+
+.status {font-size:12px;color:green;text-align:right;}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<h1>💼 Kasir Konter Hikam Cell</h1>
+<div class="status" id="status">✔ Auto Save Aktif</div>
+
+<div class="card">
+<h3>Input Transaksi</h3>
+<input type="date" id="tanggal">
+<input type="text" id="nama" placeholder="Nama Barang">
+<input type="number" id="qty" placeholder="Jumlah">
+<input type="text" id="beli" placeholder="Harga Beli" onkeyup="rupiah(this)">
+<input type="text" id="jual" placeholder="Harga Jual" onkeyup="rupiah(this)">
+<button onclick="tambah()">Simpan</button>
+<button onclick="cetakStruk()">🧾 Cetak Struk</button>
+</div>
+
+<div class="grid">
+<div class="box modal">Modal<br>Rp <span id="modal">0</span></div>
+<div class="box jual">Penjualan<br>Rp <span id="jualTotal">0</span></div>
+<div class="box laba">Laba<br>Rp <span id="laba">0</span></div>
+<div class="box total">Transaksi<br><span id="total">0</span></div>
+</div>
+
+<div class="card">
+<h3>Filter Laporan</h3>
+<select id="filter" onchange="tampilkan()">
+<option value="semua">Semua</option>
+<option value="hari">Hari Ini</option>
+<option value="bulan">Bulan Ini</option>
+<option value="tahun">Tahun Ini</option>
+</select>
+</div>
+
+<div class="card">
+<h3>Backup Data</h3>
+<button onclick="exportData()">💾 Export Data</button>
+<input type="file" onchange="importData(event)">
+</div>
+
+<div class="card">
+<h3>Grafik</h3>
+<canvas id="grafik"></canvas>
+</div>
+
+<div class="card">
+<table>
+<thead>
+<tr>
+<th>Tanggal</th>
+<th>Barang</th>
+<th>Qty</th>
+<th>Beli</th>
+<th>Jual</th>
+<th>Laba</th>
+<th>Aksi</th>
+</tr>
+</thead>
+<tbody id="data"></tbody>
+</table>
+</div>
+
+</div>
+
+<div id="struk" style="display:none;"></div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("kasirSuper")) || [];
+let chart;
+
+// AUTO SAVE
+function autoSave(){
+    localStorage.setItem("kasirSuper", JSON.stringify(data));
+    document.getElementById("status").innerText = "✔ Data tersimpan";
+}
+
+// FORMAT
+function rupiah(input){
+    let angka = input.value.replace(/[^0-9]/g,"");
+    input.value = "Rp " + angka.replace(/\B(?=(\d{3})+(?!\d))/g,".");
+}
+function angka(rp){
+    return parseInt(rp.replace(/[^0-9]/g,"")) || 0;
+}
+
+// TAMBAH
+function tambah(){
+    let tgl = document.getElementById("tanggal").value;
+    let nama = document.getElementById("nama").value;
+    let qty = parseInt(document.getElementById("qty").value);
+    let beli = angka(document.getElementById("beli").value);
+    let jual = angka(document.getElementById("jual").value);
+
+    if(!tgl || !nama || !qty || !beli || !jual){
+        alert("Lengkapi data!");
+        return;
+    }
+
+    data.push({tgl,nama,qty,beli,jual});
+    autoSave();
+    tampilkan();
+}
+
+// HAPUS
+function hapus(i){
+    data.splice(i,1);
+    autoSave();
+    tampilkan();
+}
+
+// FILTER
+function filterData(item){
+    let f=document.getElementById("filter").value;
+    let now=new Date();
+    let t=new Date(item.tgl);
+
+    if(f=="hari") return t.toDateString()==now.toDateString();
+    if(f=="bulan") return t.getMonth()==now.getMonth() && t.getFullYear()==now.getFullYear();
+    if(f=="tahun") return t.getFullYear()==now.getFullYear();
+    return true;
+}
+
+// TAMPIL
+function tampilkan(){
+    let tabel=document.getElementById("data");
+    tabel.innerHTML="";
+
+    let modal=0, jual=0, count=0;
+
+    data.filter(filterData).forEach((d,i)=>{
+        let m=d.beli*d.qty;
+        let j=d.jual*d.qty;
+        let l=j-m;
+
+        modal+=m;
+        jual+=j;
+        count++;
+
+        tabel.innerHTML+=`
+        <tr>
+        <td>${d.tgl}</td>
+        <td>${d.nama}</td>
+        <td>${d.qty}</td>
+        <td>Rp ${d.beli.toLocaleString()}</td>
+        <td>Rp ${d.jual.toLocaleString()}</td>
+        <td>Rp ${l.toLocaleString()}</td>
+        <td><button onclick="hapus(${i})">Hapus</button></td>
+        </tr>`;
+    });
+
+    document.getElementById("modal").innerText=modal.toLocaleString();
+    document.getElementById("jualTotal").innerText=jual.toLocaleString();
+    document.getElementById("laba").innerText=(jual-modal).toLocaleString();
+    document.getElementById("total").innerText=count;
+
+    grafik(modal,jual);
+}
+
+// GRAFIK
+function grafik(modal,jual){
+    let laba=jual-modal;
+    if(chart) chart.destroy();
+
+    chart=new Chart(document.getElementById("grafik"),{
+        type:'bar',
+        data:{
+            labels:['Modal','Penjualan','Laba'],
+            datasets:[{
+                data:[modal,jual,laba],
+                backgroundColor:['gray','green','orange']
+            }]
+        }
+    });
+}
+
+// EXPORT
+function exportData(){
+    let blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+    let a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="kasir-data.json";
+    a.click();
+}
+
+// IMPORT
+function importData(e){
+    let file=e.target.files[0];
+    let reader=new FileReader();
+    reader.onload=function(ev){
+        data=JSON.parse(ev.target.result);
+        autoSave();
+        tampilkan();
+    };
+    reader.readAsText(file);
+}
+
+// STRUK
+function cetakStruk(){
+    if(data.length==0){
+        alert("Belum ada transaksi");
+        return;
+    }
+
+    let d=data[data.length-1];
+    let total=d.jual*d.qty;
+
+    let isi=`
+    <h3>Konter HP Hikam</h3>
+    <p>${d.tgl}</p>
+    <p>${d.nama}</p>
+    <p>Qty: ${d.qty}</p>
+    <p>Total: Rp ${total.toLocaleString()}</p>
+    <p>Terima Kasih 🙏</p>
+    `;
+
+    let w=window.open('');
+    w.document.write(isi);
+    w.print();
+}
+
+// LOAD
+tampilkan();
+</script>
+
+</body>
+</html>
